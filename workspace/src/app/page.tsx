@@ -28,13 +28,13 @@ export default function Home() {
       const res = await fetch("/api/rag", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          question, 
-          urls: urls.split("\n").map(u => u.trim()).filter(Boolean) 
+        body: JSON.stringify({
+          question,
+          customUrls: urls.split("\n").map(u => u.trim()).filter(Boolean)
         })
       });
       const data = await res.json();
-      
+
       if (data.error) {
         setMessages(prev => [...prev, { type: "assistant", content: `Erro: ${data.error}` }]);
       } else {
@@ -83,7 +83,7 @@ export default function Home() {
             <p style={{ fontSize: "16px", color: "#666666", marginBottom: "32px" }}>
               Faça uma pergunta sobre os documentos da Expocaccer
             </p>
-            
+
             {/* Perguntas Sugeridas */}
             <div style={{
               display: "grid",
@@ -97,6 +97,7 @@ export default function Home() {
                 "Quais são os documentos necessários para participar da safra?",
                 "Como funciona o processo de certificação de qualidade?",
                 "Quais são os prazos para inscrição e participação?",
+                "Como funciona o Clube de Assinatura Dulcerrado?",
                 "Como entrar em contato com a Expocaccer para informações adicionais?"
               ].map((pergunta, i) => (
                 <button
@@ -184,13 +185,14 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div style={{ maxWidth: "900px", margin: "0 auto", paddingX: "20px" }}>
+          <div style={{ maxWidth: "900px", margin: "0 auto", paddingLeft: "20px", paddingRight: "20px" }}>
             {messages.map((msg, i) => (
               <div key={i} style={{
                 marginBottom: "12px",
                 display: "flex",
                 justifyContent: msg.type === "user" ? "flex-end" : "flex-start",
-                paddingX: "20px"
+                paddingLeft: "20px",
+                paddingRight: "20px"
               }}>
                 <div style={{
                   maxWidth: "600px",
@@ -211,7 +213,8 @@ export default function Home() {
               <div style={{
                 display: "flex",
                 justifyContent: "flex-start",
-                paddingX: "20px",
+                paddingLeft: "20px",
+                paddingRight: "20px",
                 marginTop: "12px"
               }}>
                 <div style={{
