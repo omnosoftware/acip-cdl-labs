@@ -254,10 +254,20 @@ export async function POST(req: NextRequest) {
         }
       } catch (geminiError) {
         const errorMsg = geminiError instanceof Error ? geminiError.message : "Erro desconhecido no Gemini";
-        console.warn("Falha ao consultar Gemini:", errorMsg);
-        // Continua para tentar OpenAI
+        console.error("Erro ao consultar Gemini:", errorMsg);
+
+        return NextResponse.json({
+          error: errorMsg,
+          details: "Falha ao processar requisição com Gemini."
+        }, { status: 500 });
       }
     }
+
+    // Se não tiver chave Gemini configurada
+    return NextResponse.json({
+      error: "Chave Gemini não configurada.",
+      suggestion: "Configure GEMINI_API_KEY no arquivo .env.local"
+    }, { status: 500 });
 
     // Se Gemini falhar ou não tiver chave, tenta OpenAI
     if (OPENAI_API_KEY) {
