@@ -201,51 +201,135 @@ export async function POST(req: NextRequest) {
     // Monta prompt
     const prompt = `Você é um assistente RAG para documentos da Expocaccer. Responda à pergunta do usuário com base nos trechos abaixo de forma clara e objetiva.\n\nPergunta: ${question}\n\nTrechos dos documentos:\n${context}\n\nResposta:`;
 
-    // Valida chave OpenAI
-    if (!OPENAI_API_KEY) {
-      return NextResponse.json({ error: "Chave OpenAI não configurada corretamente. Adicione OPENAI_API_KEY no .env.local" }, { status: 500 });
-    }
-
     let answer = "";
 
-    try {
-      console.log("Consultando OpenAI...");
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.3
-        })
-      });
+    // Tenta usar Gemini primeiro
+    if (GEMINI_API_KEY) {
+      try {
+        console.log("Consultando Gemini...");
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{ text: prompt }]
+            }],
+            generationConfig: {
+              temperature: 0.3
+            }
+          })
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json() as any;
-        throw new Error(`OpenAI Error: ${errorData.error?.message || response.statusText}`);
+        // Lê o corpo da resposta apenas uma vez
+        const data = await response.json() as any;
+
+        if (!response.ok) {
+          const errorMessage = data.error?.message || data.error?.status || response.statusText || 'Erro desconhecido';
+
+          // Detecta tipo de erro e fornece mensagem amigável
+          let friendlyMessage = "O Gemini está temporariamente indisponível.";
+
+          if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('limit')) {
+            friendlyMessage = "Limite de uso do Gemini atingido. Tentando provedor alternativo...";
+          } else if (errorMessage.toLowerCase().includes('not found') || response.status === 404) {
+            friendlyMessage = "Modelo Gemini não encontrado ou indisponível na sua região.";
+          } else if (response.status === 401 || response.status === 403) {
+            friendlyMessage = "Chave de API do Gemini inválida ou sem permissão.";
+          } else if (response.status >= 500) {
+            friendlyMessage = "Servidores do Gemini estão com problemas. Tentando provedor alternativo...";
+          }
+
+          console.warn(friendlyMessage, errorMessage);
+          throw new Error(friendlyMessage);
+        }
+
+        const geminiAnswer = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (geminiAnswer) {
+          return NextResponse.json({ answer: geminiAnswer });
+        } else {
+          throw new Error("Gemini retornou resposta vazia. Tentando provedor alternativo...");
+        }
+      } catch (geminiError) {
+        const errorMsg = geminiError instanceof Error ? geminiError.message : "Erro desconhecido no Gemini";
+        console.warn("Falha ao consultar Gemini:", errorMsg);
+        // Continua para tentar OpenAI
       }
-
-      const data = await response.json() as any;
-      answer = data.choices?.[0]?.message?.content;
-
-      if (!answer) {
-        throw new Error("OpenAI retornou resposta vazia.");
-      }
-
-    } catch (apiError) {
-      console.error("Erro na OpenAI:", apiError);
-      return NextResponse.json({
-        error: "Erro ao consultar OpenAI.",
-        details: apiError instanceof Error ? apiError.message : String(apiError)
-      }, { status: 500 });
     }
 
-    return NextResponse.json({ answer });
+    // Se Gemini falhar ou não tiver chave, tenta OpenAI
+    if (OPENAI_API_KEY) {
+      try {
+        console.log("Consultando OpenAI...");
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${OPENAI_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "user", content: prompt }
+            ],
+            temperature: 0.3
+          })
+        });
+
+        // Lê o corpo da resposta apenas uma vez
+        const data = await response.json() as any;
+
+        if (!response.ok) {
+          const errorMessage = data.error?.message || data.error?.type || response.statusText || 'Erro desconhecido';
+
+          // Detecta tipo de erro e fornece mensagem amigável
+          let friendlyMessage = "A OpenAI está temporariamente indisponível.";
+
+          if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('insufficient_quota')) {
+            friendlyMessage = "Limite de créditos da OpenAI atingido. Verifique seu plano e billing.";
+          } else if (errorMessage.toLowerCase().includes('rate limit')) {
+            friendlyMessage = "Limite de requisições da OpenAI atingido. Tente novamente em alguns segundos.";
+          } else if (response.status === 401) {
+            friendlyMessage = "Chave de API da OpenAI inválida ou expirada.";
+          } else if (response.status === 403) {
+            friendlyMessage = "Acesso negado pela OpenAI. Verifique as permissões da sua chave.";
+          } else if (response.status === 404) {
+            friendlyMessage = "Modelo da OpenAI não encontrado.";
+          } else if (response.status >= 500) {
+            friendlyMessage = "Servidores da OpenAI estão com problemas.";
+          }
+
+          console.error(friendlyMessage, errorMessage);
+          throw new Error(friendlyMessage);
+        }
+
+        const openaiAnswer = data.choices?.[0]?.message?.content;
+
+        if (openaiAnswer) {
+          return NextResponse.json({ answer: openaiAnswer });
+        } else {
+          throw new Error("OpenAI retornou resposta vazia.");
+        }
+
+      } catch (openAIError) {
+        const errorMsg = openAIError instanceof Error ? openAIError.message : "Erro desconhecido na OpenAI";
+        console.error("Erro na OpenAI:", errorMsg);
+
+        return NextResponse.json({
+          error: "Não foi possível gerar uma resposta no momento.",
+          details: errorMsg,
+          suggestion: "Verifique suas chaves de API do Gemini e OpenAI, ou tente novamente mais tarde."
+        }, { status: 500 });
+      }
+    }
+
+    // Se chegou aqui, nenhuma chave funcionou ou resposta foi vazia
+    return NextResponse.json({
+      error: "Nenhum provedor de IA configurado ou disponível.",
+      suggestion: "Configure pelo menos uma chave de API (GEMINI_API_KEY ou OPENAI_API_KEY) no arquivo .env.local"
+    }, { status: 500 });
   } catch (error) {
     console.error("Erro no endpoint RAG:", error);
     return NextResponse.json({
