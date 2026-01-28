@@ -201,79 +201,81 @@ export async function POST(req: NextRequest) {
     // Monta prompt
     const prompt = `VocÃª Ã© um assistente RAG para documentos da Expocaccer. Responda Ã  pergunta do usuÃ¡rio com base nos trechos abaixo de forma clara e objetiva.\n\nPergunta: ${question}\n\nTrechos dos documentos:\n${context}\n\nResposta:`;
 
-    let answer = "";
-
-    // Tenta usar Gemini primeiro
-    if (GEMINI_API_KEY) {
-      try {
-        console.log("Consultando Gemini...");
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompt }]
-            }],
-            generationConfig: {
-              temperature: 0.3
-            }
-          })
-        });
-
-        // LÃª o corpo da resposta apenas uma vez
-        const data = await response.json() as any;
-
-        if (!response.ok) {
-          const errorMessage = data.error?.message || data.error?.status || response.statusText || 'Erro desconhecido';
-
-          // Detecta tipo de erro e fornece mensagem amigÃ¡vel
-          let friendlyMessage = "O Gemini estÃ¡ temporariamente indisponÃ­vel.";
-
-          if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('limit')) {
-            friendlyMessage = "Limite de uso do Gemini atingido. Tentando provedor alternativo...";
-          } else if (errorMessage.toLowerCase().includes('not found') || response.status === 404) {
-            friendlyMessage = "Modelo Gemini nÃ£o encontrado ou indisponÃ­vel na sua regiÃ£o.";
-          } else if (response.status === 401 || response.status === 403) {
-            friendlyMessage = "Chave de API do Gemini invÃ¡lida ou sem permissÃ£o.";
-          } else if (response.status >= 500) {
-            friendlyMessage = "Servidores do Gemini estÃ£o com problemas. Tentando provedor alternativo...";
-          }
-
-          console.warn(friendlyMessage, errorMessage);
-          throw new Error(friendlyMessage);
-        }
-
-        const geminiAnswer = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (geminiAnswer) {
-          return NextResponse.json({ answer: geminiAnswer });
-        } else {
-          throw new Error("Gemini retornou resposta vazia. Tentando provedor alternativo...");
-        }
-      } catch (geminiError) {
-        const errorMsg = geminiError instanceof Error ? geminiError.message : "Erro desconhecido no Gemini";
-        console.error("Erro ao consultar Gemini:", errorMsg);
-
-        return NextResponse.json({
-          error: errorMsg,
-          details: "Falha ao processar requisiÃ§Ã£o com Gemini."
-        }, { status: 500 });
-      }
+    // Valida chave Gemini
+    if (!GEMINI_API_KEY) {
+      return NextResponse.json({ 
+        error: \"Chave Gemini não configurada.\",
+        suggestion: \"Configure GEMINI_API_KEY no arquivo .env.local\"
+      }, { status: 500 });
     }
 
-    // Se nÃ£o tiver chave Gemini configurada
-    return NextResponse.json({
-      error: "Chave Gemini nÃ£o configurada.",
-      suggestion: "Configure GEMINI_API_KEY no arquivo .env.local"
-    }, { status: 500 });
+    try {
+      console.log(\"Consultando Gemini...\");
+      const response = await fetch(https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=, {
+        method: \"POST\",
+        headers: {
+          \"Content-Type\": \"application/json\"
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            temperature: 0.3
+          }
+        })
+      });
+
+      // Lê o corpo da resposta apenas uma vez
+      const data = await response.json() as any;
+
+      if (!response.ok) {
+        const errorMessage = data.error?.message || data.error?.status || response.statusText || 'Erro desconhecido';
+        
+        // Detecta tipo de erro e fornece mensagem amigável
+        let friendlyMessage = \"O Gemini está temporariamente indisponível.\";
+        
+        if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('limit')) {
+          friendlyMessage = \"Limite de uso do Gemini atingido. Tente novamente mais tarde.\";
+        } else if (errorMessage.toLowerCase().includes('not found') || response.status === 404) {
+          friendlyMessage = \"Modelo Gemini não encontrado ou indisponível na sua região.\";
+        } else if (response.status === 401 || response.status === 403) {
+          friendlyMessage = \"Chave de API do Gemini inválida ou sem permissão.\";
+        } else if (response.status >= 500) {
+          friendlyMessage = \"Servidores do Gemini estão com problemas.\";
+        }
+        
+        return NextResponse.json({
+          error: friendlyMessage,
+          details: errorMessage
+        }, { status: response.status });
+      }
+
+      const answer = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!answer) {
+        return NextResponse.json({
+          error: \"Gemini retornou resposta vazia.\",
+          details: \"Nenhum conteúdo foi gerado pela API.\"
+        }, { status: 500 });
+      }
+
+      return NextResponse.json({ answer });
+
+    } catch (apiError) {
+      const errorMsg = apiError instanceof Error ? apiError.message : \"Erro desconhecido\";
+      console.error(\"Erro ao consultar Gemini:\", errorMsg);
+      
+      return NextResponse.json({
+        error: \"Erro ao processar requisição com Gemini.\",
+        details: errorMsg
+      }, { status: 500 });
+    }
   } catch (error) {
-    console.error("Erro no endpoint RAG:", error);
+    console.error(\"Erro no endpoint RAG:\", error);
     return NextResponse.json({
-      error: "Erro interno ao processar a requisiÃ§Ã£o.",
-      details: error instanceof Error ? error.message : "Erro desconhecido"
+      error: \"Erro interno ao processar a requisição.\",
+      details: error instanceof Error ? error.message : \"Erro desconhecido\"
     }, { status: 500 });
   }
 }
-
