@@ -52,15 +52,57 @@ export default function Home() {
       <div style={{
         borderBottom: "1px solid #e5e7eb",
         padding: "16px 20px",
-        backgroundColor: "#ffffff"
+        backgroundColor: "#ffffff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
       }}>
-        <div style={{ maxWidth: "900px", margin: "0 auto" }}>
-          <h1 style={{ fontSize: "20px", fontWeight: "600", color: "#000000", margin: 0 }}>
-            RAG - Expocaccer
-          </h1>
-          <p style={{ fontSize: "14px", color: "#666666", margin: "4px 0 0 0" }}>
-            Consulte documentos com inteligência artificial
-          </p>
+        <div style={{ maxWidth: "900px", margin: "0 auto", display: "flex", alignItems: "center", width: "100%", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <img
+              src="/assets/logo.png"
+              alt="ACIP/CDL Logo"
+              style={{ height: "50px", width: "auto", objectFit: "contain" }}
+            />
+            <div>
+              <h1 style={{ fontSize: "20px", fontWeight: "600", color: "#000000", margin: 0 }}>
+                RAG - ACIP/CDL Patrocínio
+              </h1>
+              <p style={{ fontSize: "14px", color: "#666666", margin: "4px 0 0 0" }}>
+                Consulte serviços e informações da ACIP/CDL
+              </p>
+            </div>
+          </div>
+          {messages.length > 0 && (
+            <button
+              onClick={() => {
+                setMessages([]);
+                setQuestion("");
+              }}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "transparent",
+                border: "1px solid #e5e7eb",
+                borderRadius: "6px",
+                fontSize: "14px",
+                color: "#666666",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#f3f4f6";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "#d1d5db";
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = "#e5e7eb";
+              }}
+            >
+              <span>←</span> Voltar
+            </button>
+          )}
         </div>
       </div>
 
@@ -76,12 +118,11 @@ export default function Home() {
             textAlign: "center",
             padding: "20px"
           }}>
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>💬</div>
             <h2 style={{ fontSize: "28px", fontWeight: "600", color: "#000000", marginBottom: "8px" }}>
-              Bem-vindo ao RAG
+              Bem-vindo ao Assistente ACIP
             </h2>
             <p style={{ fontSize: "16px", color: "#666666", marginBottom: "32px" }}>
-              Faça uma pergunta sobre os documentos da Expocaccer
+              Tire suas dúvidas sobre serviços, convênios e associativismo
             </p>
 
             {/* Perguntas Sugeridas */}
@@ -93,12 +134,12 @@ export default function Home() {
               marginBottom: "32px"
             }}>
               {[
-                "Qual é o procedimento para registrar o café na Expocaccer?",
-                "Quais são os documentos necessários para participar da safra?",
-                "Como funciona o processo de certificação de qualidade?",
-                "Quais são os prazos para inscrição e participação?",
-                "Como funciona o Clube de Assinatura Dulcerrado?",
-                "Como entrar em contato com a Expocaccer para informações adicionais?"
+                "Como me tornar um associado da ACIP/CDL?",
+                "Quais são os benefícios de ser associado?",
+                "Como funciona o Serviço de Proteção ao Crédito (SPC)?",
+                "Quais são os horários de funcionamento do comércio?",
+                "Como emitir um certificado digital?",
+                "Onde fica localizada a ACIP/CDL?"
               ].map((pergunta, i) => (
                 <button
                   key={i}
@@ -123,7 +164,7 @@ export default function Home() {
                   }}
                   onMouseEnter={e => {
                     (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#e5e7eb";
-                    (e.currentTarget as HTMLButtonElement).style.borderColor = "#10a37f";
+                    (e.currentTarget as HTMLButtonElement).style.borderColor = "#0054a6";
                   }}
                   onMouseLeave={e => {
                     (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#f3f4f6";
@@ -198,7 +239,7 @@ export default function Home() {
                   maxWidth: "600px",
                   padding: "12px 16px",
                   borderRadius: "12px",
-                  backgroundColor: msg.type === "user" ? "#10a37f" : "#f7f7f7",
+                  backgroundColor: msg.type === "user" ? "#0054a6" : "#f7f7f7",
                   color: msg.type === "user" ? "#ffffff" : "#000000",
                   fontSize: "15px",
                   lineHeight: "1.5",
@@ -286,7 +327,7 @@ export default function Home() {
               disabled={loading || !question.trim()}
               style={{
                 padding: "12px 24px",
-                backgroundColor: loading || !question.trim() ? "#cccccc" : "#10a37f",
+                backgroundColor: loading || !question.trim() ? "#cccccc" : "#0054a6",
                 color: "#ffffff",
                 border: "none",
                 borderRadius: "8px",
@@ -297,12 +338,12 @@ export default function Home() {
               }}
               onMouseEnter={e => {
                 if (!loading && question.trim()) {
-                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#0a8860";
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#004385";
                 }
               }}
               onMouseLeave={e => {
                 if (!loading && question.trim()) {
-                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#10a37f";
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#0054a6";
                 }
               }}
             >
@@ -358,8 +399,8 @@ export default function Home() {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
         input:focus, textarea:focus {
-          border-color: #10a37f !important;
-          box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1);
+          border-color: #0054a6 !important;
+          box-shadow: 0 0 0 3px rgba(0, 84, 166, 0.1);
         }
       `}</style>
     </div>
