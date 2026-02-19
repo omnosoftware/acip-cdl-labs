@@ -11,11 +11,11 @@ const DOCUMENTS_DIR = path.join(process.cwd(), "public", "documents");
 
 // URLs de páginas web para complementar o RAG (opcional)
 const WEB_URLS = [
-  "https://www.acip.org.br/",
-  "https://www.acip.org.br/servicos",
-  "https://www.acip.org.br/noticias",
-  "https://www.acip.org.br/associados",
-  "https://www.acip.org.br/contato"
+  "https://www.sonoticiaboa.com.br/",
+  "https://www.sonoticiaboa.com.br/categoria/meio-ambiente/",
+  "https://www.sonoticiaboa.com.br/categoria/educacao/",
+  "https://www.sonoticiaboa.com.br/categoria/saude/",
+  "https://www.sonoticiaboa.com.br/categoria/social/"
 ];
 
 // Função para extrair texto de PDF local
@@ -113,74 +113,28 @@ function findRelevantChunks(chunks: string[], question: string): string[] {
 
 export async function POST(req: NextRequest) {
   try {
-    const { question, includeWebUrls = true, customUrls = [] } = await req.json();
+    const { question } = await req.json();
     if (!question) {
       return NextResponse.json({ error: "Pergunta é obrigatória." }, { status: 400 });
     }
 
     let allChunks: { source: string, chunk: string }[] = [];
 
-    // 1. Processar URLs customizadas (se fornecidas)
-    if (Array.isArray(customUrls) && customUrls.length > 0) {
-      for (const url of customUrls) {
-        try {
-          let text = "";
-          if (url.toLowerCase().endsWith(".pdf")) {
-            text = await extractPdfFromUrl(url);
-          } else {
-            text = await extractHtmlText(url);
-          }
-          const chunks = chunkText(text);
-          allChunks.push(...chunks.map(chunk => ({ source: url, chunk })));
-          console.log(`Processado URL: ${url} - ${chunks.length} chunks`);
-        } catch (e) {
-          console.error(`Erro ao processar URL ${url}:`, e);
-        }
+    // 1. Processar URLs do Só Notícia Boa (sempre ativo)
+    for (const url of WEB_URLS) {
+      try {
+        const text = await extractHtmlText(url);
+        const chunks = chunkText(text);
+        allChunks.push(...chunks.map(chunk => ({ source: url, chunk })));
+        console.log(`Processado URL: ${url} - ${chunks.length} chunks`);
+      } catch (e) {
+        console.error(`Erro ao processar URL ${url}:`, e);
       }
     }
-
-    // 2. Processar PDFs locais (DESATIVADO)
-    /*
-    try {
-      const files = await readdir(DOCUMENTS_DIR);
-      const pdfFiles = files.filter(file => file.toLowerCase().endsWith('.pdf'));
-
-      console.log(`Encontrados ${pdfFiles.length} PDFs locais`);
-
-      for (const pdfFile of pdfFiles) {
-        try {
-          const filePath = path.join(DOCUMENTS_DIR, pdfFile);
-          const text = await extractPdfText(filePath);
-          const chunks = chunkText(text);
-          allChunks.push(...chunks.map(chunk => ({ source: pdfFile, chunk })));
-          console.log(`Processado: ${pdfFile} - ${chunks.length} chunks`);
-        } catch (e) {
-          console.error(`Erro ao processar PDF ${pdfFile}:`, e);
-        }
-      }
-    } catch (e) {
-      console.error("Erro ao ler diretório de documentos:", e);
-    }
-    */
-
-    // 3. Opcionalmente processar URLs web padrão (DESATIVADO - Apenas URLs enviadas)
-    /*
-    if (includeWebUrls) {
-      for (const url of WEB_URLS) {
-        try {
-          const text = await extractHtmlText(url);
-          const chunks = chunkText(text);
-          allChunks.push(...chunks.map(chunk => ({ source: url, chunk })));
-        } catch (e) {
-          console.error(`Erro ao processar URL ${url}:`, e);
-        }
-      }
-    }
-    */
 
     if (allChunks.length === 0) {
       return NextResponse.json({
-        error: "Nenhum conteúdo encontrado. Verifique se as URLs estão corretas."
+        error: "Não foi possível acessar o conteúdo do Só Notícia Boa no momento. Tente novamente."
       }, { status: 400 });
     }
 
@@ -198,7 +152,7 @@ export async function POST(req: NextRequest) {
     const context = relevant.map((chunk, i) => `Trecho ${i + 1}: ${chunk}`).join("\n\n");
 
     // Monta prompt
-    const prompt = `Você é um assistente RAG para serviços e informações da ACIP/CDL Patrocínio. Responda à pergunta do usuário com base nos trechos abaixo de forma clara e objetiva.\n\nPergunta: ${question}\n\nTrechos dos documentos:\n${context}\n\nResposta:`;
+    const prompt = `Você é um assistente do portal Só Notícia Boa (sonoticiaboa.com.br), especializado em boas notícias, histórias inspiradoras, iniciativas sociais, meio ambiente, educação e saúde. Responda à pergunta do usuário com base nos trechos abaixo de forma clara, positiva e objetiva.\n\nPergunta: ${question}\n\nTrechos dos documentos:\n${context}\n\nResposta:`;
 
     let answer = "";
 
