@@ -1,0 +1,102 @@
+[
+  {
+    "id": "PAR-001",
+    "name": "Filtro de Óleo para Trator (John Deere/Massey)",
+    "description": "Filtro de lubrificante de alta performance para tratores agrícolas. Compatível com principais marcas.",
+    "price": 85.00,
+    "unit": "unidade",
+    "stock": 45,
+    "category": "Peças de Trator",
+    "image": "/images/filter.png"
+  },
+  {
+    "id": "PAR-002",
+    "name": "Jogo de Anéis de Pistão",
+    "description": "Kit de anéis para motor de trator. Peças originais e similares de alta qualidade.",
+    "price": 320.00,
+    "unit": "kit",
+    "stock": 12,
+    "category": "Peças de Trator",
+    "image": "/images/engine.png"
+  },
+  {
+    "id": "PAR-003",
+    "name": "Bomba Injetora Reformada",
+    "description": "Bomba injetora para motores diesel de tratores e caminhões. Garantia de 6 meses.",
+    "price": 1200.00,
+    "unit": "unidade",
+    "stock": 3,
+    "category": "Peças de Trator",
+    "image": "/images/pump.png"
+  },
+  {
+    "id": "PAR-004",
+    "name": "Correia do Alternador",
+    "description": "Correia reforçada para sistemas elétricos de máquinas agrícolas.",
+    "price": 45.00,
+    "unit": "unidade",
+    "stock": 30,
+    "category": "Peças de Trator",
+    "image": "/images/filter.png"
+  },
+  {
+    "id": "SVC-001",
+    "name": "Manutenção Preventiva de Trator",
+    "description": "Serviço completo de revisão: troca de óleo, filtros e check-up de 50 pontos.",
+    "price": 450.00,
+    "unit": "serviço",
+    "stock": 99,
+    "category": "Serviços Oficina",
+    "image": "/images/engine.png"
+  },
+  {
+    "id": "SVC-002",
+    "name": "Reparo de Sistema Hidráulico",
+    "description": "Diagnóstico e reparo de vazamentos e pressão no sistema hidráulico de tratores.",
+    "price": 250.00,
+    "unit": "mão de obra básica",
+    "stock": 99,
+    "category": "Serviços Oficina",
+    "image": "/images/pump.png"
+  },
+  {
+    "id": "LUB-001",
+    "name": "Óleo Lubrificante 15W40 Diesel",
+    "description": "Óleo de alta performance para motores diesel pesados. Galão de 20 litros.",
+    "price": 380.00,
+    "unit": "galão 20L",
+    "stock": 25,
+    "category": "Lubrificantes",
+    "image": "/images/oil.png"
+  },
+  {
+    "id": "BAT-001",
+    "name": "Bateria 150Ah Selada - Pesada",
+    "description": "Bateria de alta durabilidade para tratores e colheitadeiras. Alta corrente de partida.",
+    "price": 850.00,
+    "unit": "unidade",
+    "stock": 8,
+    "category": "Baterias",
+    "image": "/images/battery.png"
+  },
+  {
+    "id": "ILL-001",
+    "name": "Farol de Milha LED Auxiliar",
+    "description": "Farol de alta luminosidade para trabalho noturno. Resistente a vibrações e água.",
+    "price": 120.00,
+    "unit": "unidade",
+    "stock": 15,
+    "category": "Iluminação",
+    "image": "/images/light.png"
+  },
+  {
+    "id": "PAR-005",
+    "name": "Graxa Azul para Rolamentos",
+    "description": "Graxa de lítio de extrema pressão para lubrificação de chassis e rolamentos.",
+    "price": 35.00,
+    "unit": "pote 500g",
+    "stock": 50,
+    "category": "Lubrificantes",
+    "image": "/images/oil.png"
+  }
+]

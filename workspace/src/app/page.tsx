@@ -1,9 +1,64 @@
-"use client";
 import React, { useState, useRef, useEffect } from "react";
+import { generatePixPayload } from "@/lib/pix";
+import { generatePDF, generateExcel } from "@/lib/export";
+
+// Simple UI Component for PIX/Docs
+const ActionCard = ({ type, data, brand }: any) => {
+  const [copied, setCopied] = useState(false);
+
+  if (type === "payment") {
+    const pixCode = generatePixPayload(
+      data.pix_key,
+      data.amount,
+      data.merchant_name,
+      data.merchant_city,
+      data.description
+    );
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(pixCode)}`;
+
+    const copyToClipboard = () => {
+      navigator.clipboard.writeText(pixCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+      <div style={{ backgroundColor: "#ffffff", padding: "16px", borderRadius: "12px", border: `1px solid ${brand.green}`, marginTop: "10px" }}>
+        <p style={{ fontWeight: "700", marginBottom: "8px", fontSize: "14px" }}>💳 Pagamento Instantâneo (PIX)</p>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "12px" }}>
+          <img src={qrCodeUrl} alt="QR Code PIX" style={{ borderRadius: "8px", width: "160px" }} />
+        </div>
+        <p style={{ fontSize: "12px", color: brand.ink, marginBottom: "12px", textAlign: "center" }}>
+          Escaneie o código acima ou copie a chave abaixo.
+        </p>
+        <button
+          onClick={copyToClipboard}
+          style={{
+            width: "100%",
+            padding: "10px",
+            backgroundColor: brand.forest,
+            color: "#ffffff",
+            border: "none",
+            borderRadius: "8px",
+            fontSize: "13px",
+            cursor: "pointer",
+            fontWeight: "600"
+          }}
+        >
+          {copied ? "✅ Copiado!" : "📋 Copiar Código PIX"}
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+};
 
 export default function Home() {
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState<{ type: "user" | "assistant"; content: string }[]>([]);
+  // Messages can now contain structured metadata
+  const [messages, setMessages] = useState<{ type: "user" | "assistant"; content: string; metadata?: any }[]>([]);
+  const [lastQuote, setLastQuote] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const brand = {
@@ -26,21 +81,31 @@ export default function Home() {
     if (!text.trim()) return;
 
     setLoading(true);
-    setMessages((prev) => [...prev, { type: "user", content: text }]);
+    const newMessages = [...messages, { type: "user", content: text }];
+    setMessages(newMessages as any);
     setQuestion("");
+
+    const history = messages.map(msg => ({
+      role: msg.type === "user" ? "user" : "model",
+      parts: [{ text: msg.content }]
+    }));
 
     try {
       const res = await fetch("/api/rag", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: text }),
+        body: JSON.stringify({ question: text, history }),
       });
       const data = await res.json();
 
       if (data.error) {
         setMessages((prev) => [...prev, { type: "assistant", content: `Erro: ${data.error}` }]);
       } else {
-        setMessages((prev) => [...prev, { type: "assistant", content: data.answer }]);
+        // Update last quote if the tool return a quote
+        if (data.metadata?.items && data.metadata?.total) {
+          setLastQuote(data.metadata);
+        }
+        setMessages((prev) => [...prev, { type: "assistant", content: data.answer, metadata: data.metadata }]);
       }
     } catch {
       setMessages((prev) => [...prev, { type: "assistant", content: "Erro ao conectar ao servidor. Tente novamente." }]);
@@ -51,6 +116,97 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await askQuestion(question);
+  };
+
+  // Product Card Component
+  const ProductCard = ({ product, brand }: any) => {
+    return (
+      <div style={{
+        backgroundColor: "#ffffff",
+        borderRadius: "10px",
+        border: "1px solid #DCE6DE",
+        overflow: "hidden",
+        width: "180px",
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+      }}>
+        {product.image && (
+          <div style={{ height: "100px", overflow: "hidden", backgroundColor: "#f9f9f9" }}>
+            <img src={product.image} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          </div>
+        )}
+        <div style={{ padding: "10px", display: "flex", flexDirection: "column", flex: 1 }}>
+          <p style={{ fontSize: "12px", fontWeight: "700", color: brand.ink, margin: "0 0 4px 0", lineHeight: "1.2", height: "30px", overflow: "hidden" }}>
+            {product.name}
+          </p>
+          <p style={{ fontSize: "14px", fontWeight: "800", color: brand.green, margin: "auto 0 0 0" }}>
+            R$ {product.price.toFixed(2)}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  // Helper to extract quote info and offer downloads
+  const renderMessageContent = (msg: any) => {
+    const isAssistant = msg.type === "assistant";
+
+    // Check if metadata contains a list of products
+    const productList = Array.isArray(msg.metadata) ? msg.metadata : (msg.metadata?.products || null);
+
+    // Check if message mentions quote/total or has metadata items
+    const hasQuote = msg.metadata?.items || msg.content.toLowerCase().includes("total");
+
+    // Check if it's a payment tool response in metadata
+    const isPayment = msg.metadata?.type === "payment_pix";
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div>{msg.content}</div>
+
+        {isAssistant && productList && (
+          <div style={{
+            display: "flex",
+            gap: "10px",
+            overflowX: "auto",
+            padding: "10px 0",
+            msOverflowStyle: "none",
+            scrollbarWidth: "none"
+          }}>
+            {productList.map((p: any, idx: number) => (
+              <ProductCard key={idx} product={p} brand={brand} />
+            ))}
+          </div>
+        )}
+
+        {isAssistant && hasQuote && lastQuote && (
+          <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+            <button
+              onClick={() => generatePDF({ ...lastQuote, customerName: "Igor" })}
+              style={{ padding: "6px 10px", fontSize: "11px", backgroundColor: "#fff", border: `1px solid ${brand.green}`, borderRadius: "4px", cursor: "pointer", color: brand.forest }}
+            >
+              📄 Baixar PDF
+            </button>
+            <button
+              onClick={() => generateExcel(lastQuote)}
+              style={{ padding: "6px 10px", fontSize: "11px", backgroundColor: "#fff", border: `1px solid ${brand.green}`, borderRadius: "4px", cursor: "pointer", color: brand.forest }}
+            >
+              📊 Baixar Excel
+            </button>
+          </div>
+        )}
+
+        {isAssistant && isPayment && (
+          <ActionCard
+            type="payment"
+            brand={brand}
+            data={msg.metadata}
+          />
+        )}
+      </div>
+    );
   };
 
   return (
@@ -80,7 +236,7 @@ export default function Home() {
               <path d="M21 29 C23 22, 28 20, 32 18" stroke={brand.forest} strokeWidth="2.2" fill="none" strokeLinecap="round" />
               <path d="M20 33 C24 37, 31 37, 34 32" stroke={brand.forest} strokeWidth="2.2" fill="none" strokeLinecap="round" />
               <text x="50" y="20" fill="rgba(255,255,255,0.72)" fontSize="9" fontFamily="Manrope, Arial, sans-serif" fontWeight="700" letterSpacing="2">
-                EMPRESA
+                E-COMMERCE
               </text>
               <text x="50" y="40" fill="#ffffff" fontSize="20" fontFamily="Manrope, Arial, sans-serif" fontWeight="800">
                 TRATOPEL
@@ -97,7 +253,7 @@ export default function Home() {
                   letterSpacing: "0.4px",
                 }}
               >
-                Assistente Inteligente
+                Assistente de Vendas
               </h1>
               <p
                 style={{
@@ -107,7 +263,7 @@ export default function Home() {
                   fontFamily: "'Manrope', sans-serif",
                 }}
               >
-                Conteudo sobre a TRATOPEL em Patrocinio-MG
+                Cotações e Pedidos - Patrocínio-MG
               </p>
             </div>
           </div>
@@ -130,14 +286,6 @@ export default function Home() {
                 gap: "6px",
                 fontFamily: "'Manrope', sans-serif",
                 transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(255,255,255,0.2)";
-                (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.5)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(255,255,255,0.1)";
-                (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.3)";
               }}
             >
               <span>←</span> Nova conversa
@@ -162,7 +310,7 @@ export default function Home() {
               animation: "slideUp 0.5s ease-out",
             }}
           >
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>🏭</div>
+            <div style={{ fontSize: "48px", marginBottom: "16px" }}>🚜</div>
             <h2
               style={{
                 fontSize: "28px",
@@ -172,7 +320,7 @@ export default function Home() {
                 fontFamily: "'Manrope', sans-serif",
               }}
             >
-              Assistente TRATOPEL
+              Vendas TRATOPEL
             </h2>
             <p
               style={{
@@ -182,7 +330,7 @@ export default function Home() {
                 fontFamily: "'Manrope', sans-serif",
               }}
             >
-              Pergunte sobre noticias, presencia digital e informacoes publicas da empresa em Patrocinio-MG
+              Consulte preços, faça cotações e realize pedidos de forma rápida e inteligente.
             </p>
 
             <div
@@ -195,12 +343,14 @@ export default function Home() {
               }}
             >
               {[
-                "Quais links recentes falam sobre a TRATOPEL em Patrocinio-MG?",
-                "O que a TRATOPEL divulga sobre produtos e servicos?",
-                "Existe alguma noticia institucional da TRATOPEL nos ultimos anos?",
-                "Quais canais online da TRATOPEL aparecem na busca?",
-                "Resuma as informacoes encontradas sobre a TRATOPEL",
-                "Quais dados publicos existem sobre a TRATOPEL em Minas Gerais?",
+                "Quais os produtos disponíveis hoje?",
+                "Quero fazer uma cotação de peças para trator",
+                "Quais serviços de oficina vocês oferecem?",
+                "Quanto custa o filtro de óleo e a bateria?",
+                "Vocês entregam peças em fazendas da região?",
+                "Como faço para pagar via PIX?",
+                "Tem bomba injetora para caminhão?",
+                "Gostaria de orçar uma revisão completa no meu trator",
               ].map((pergunta, i) => (
                 <button
                   key={i}
@@ -221,53 +371,9 @@ export default function Home() {
                     fontFamily: "'Manrope', sans-serif",
                     boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
                   }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = brand.soft;
-                    (e.currentTarget as HTMLButtonElement).style.borderColor = brand.green;
-                    (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 8px rgba(28,124,84,0.15)";
-                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#ffffff";
-                    (e.currentTarget as HTMLButtonElement).style.borderColor = "#DCE6DE";
-                    (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 1px 3px rgba(0,0,0,0.05)";
-                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
-                  }}
                 >
                   {pergunta}
                 </button>
-              ))}
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-                gap: "12px",
-                maxWidth: "700px",
-              }}
-            >
-              {[
-                { icon: "🔎", label: "Busca de links" },
-                { icon: "📄", label: "Resumo objetivo" },
-                { icon: "🏢", label: "Foco na TRATOPEL" },
-                { icon: "⚡", label: "Resposta rapida" },
-              ].map((feature, i) => (
-                <div
-                  key={i}
-                  style={{
-                    padding: "12px 16px",
-                    backgroundColor: "#F6FAF7",
-                    borderRadius: "10px",
-                    fontSize: "13px",
-                    color: brand.forest,
-                    fontWeight: "700",
-                    fontFamily: "'Manrope', sans-serif",
-                    border: "1px solid rgba(28, 124, 84, 0.1)",
-                  }}
-                >
-                  {feature.icon} {feature.label}
-                </div>
               ))}
             </div>
           </div>
@@ -300,52 +406,13 @@ export default function Home() {
                       msg.type === "user" ? "0 2px 6px rgba(15, 81, 50, 0.28)" : "0 1px 3px rgba(0,0,0,0.06)",
                   }}
                 >
-                  {msg.content}
+                  {renderMessageContent(msg)}
                 </div>
               </div>
             ))}
             {loading && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-start",
-                  paddingLeft: "20px",
-                  paddingRight: "20px",
-                  marginTop: "12px",
-                }}
-              >
-                <div
-                  style={{
-                    padding: "14px 20px",
-                    borderRadius: "12px 12px 12px 2px",
-                    backgroundColor: "#EEF2EF",
-                    color: brand.ink,
-                  }}
-                >
-                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: brand.green, animation: "bounce 1.4s infinite" }} />
-                    <div
-                      style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "50%",
-                        backgroundColor: brand.green,
-                        animation: "bounce 1.4s infinite",
-                        animationDelay: "0.2s",
-                      }}
-                    />
-                    <div
-                      style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "50%",
-                        backgroundColor: brand.green,
-                        animation: "bounce 1.4s infinite",
-                        animationDelay: "0.4s",
-                      }}
-                    />
-                  </div>
-                </div>
+              <div style={{ paddingLeft: "40px", marginTop: "12px" }}>
+                <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: brand.green, animation: "bounce 1.4s infinite" }} />
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -360,7 +427,7 @@ export default function Home() {
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Pergunte sobre a TRATOPEL..."
+              placeholder="Digite seu pedido ou cotação..."
               disabled={loading}
               style={{
                 flex: 1,
@@ -369,10 +436,7 @@ export default function Home() {
                 borderRadius: "10px",
                 fontSize: "15px",
                 outline: "none",
-                backgroundColor: loading ? "#F1F5F1" : "#ffffff",
-                color: brand.ink,
                 fontFamily: "'Manrope', sans-serif",
-                transition: "border-color 0.2s, box-shadow 0.2s",
               }}
             />
             <button
@@ -380,28 +444,13 @@ export default function Home() {
               disabled={loading || !question.trim()}
               style={{
                 padding: "12px 24px",
-                backgroundColor: loading || !question.trim() ? "#A7C4B2" : brand.forest,
+                backgroundColor: brand.forest,
                 color: "#ffffff",
                 border: "none",
                 borderRadius: "10px",
                 fontSize: "15px",
                 fontWeight: "600",
-                cursor: loading || !question.trim() ? "not-allowed" : "pointer",
-                transition: "all 0.2s",
-                fontFamily: "'Manrope', sans-serif",
-                boxShadow: loading || !question.trim() ? "none" : "0 2px 6px rgba(15,81,50,0.3)",
-              }}
-              onMouseEnter={(e) => {
-                if (!loading && question.trim()) {
-                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#0B3F27";
-                  (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 12px rgba(15, 81, 50, 0.38)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!loading && question.trim()) {
-                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = brand.forest;
-                  (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 6px rgba(15,81,50,0.3)";
-                }
+                cursor: "pointer",
               }}
             >
               Enviar
@@ -411,33 +460,10 @@ export default function Home() {
       </div>
 
       <style>{`
-        @keyframes bounce {
-          0%, 80%, 100% { opacity: 0.3; }
-          40% { opacity: 1; }
-        }
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        * {
-          box-sizing: border-box;
-        }
-        body {
-          margin: 0;
-          padding: 0;
-          font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-        @media (max-width: 640px) {
-          div[style*="gridTemplateColumns: 1fr 1fr"] {
-            grid-template-columns: 1fr !important;
-          }
-        }
+        @keyframes bounce { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; font-family: "Manrope", sans-serif; }
       `}</style>
     </div>
   );
