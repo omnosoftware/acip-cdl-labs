@@ -215,7 +215,12 @@ export async function POST(req: NextRequest) {
     }
 
     // RAG Logic for non-transactional queries
-    const discoveredUrls = await discoverTratopelLinks(question);
+    let discoveredUrls: string[] = [];
+    try {
+      discoveredUrls = await discoverTratopelLinks(question);
+    } catch (e) {
+      console.error("Search failed:", e);
+    }
     const targetUrls = [...new Set([...discoveredUrls, ...FALLBACK_TRATOPEL_URLS])].slice(0, 4);
 
     const extracted = await Promise.allSettled(
@@ -241,7 +246,7 @@ Sua missão é ajudar clientes com informações sobre a empresa, produtos e rea
 A TRATOPEL atua no agronegócio (peças de tratores, mecânica pesada, lubrificantes).
 
 Instruções:
-1. Para informações gerais, use o contexto fornecido.
+1. Para informações gerais, use o contexto fornecido no RAG.
 2. Para preços, estoque ou catálogo, USE OBRIGATORIAMENTE as ferramentas disponíveis.
 3. Se o cliente quiser uma cotação, peça os itens e quantidades e use a ferramenta 'generate_quote'.
 4. Após gerar uma cotação, informe ao cliente que ele pode baixar o arquivo em **PDF** ou **EXCEL**.
@@ -252,16 +257,18 @@ Contexto RAG:
 ${context}`;
 
     if (!GEMINI_API_KEY) {
-      return NextResponse.json({ error: "Chave Gemini não configurada." }, { status: 500 });
+      console.error("GEMINI_API_KEY is missing");
+      return NextResponse.json({ error: "Chave Gemini não configurada no ambiente." }, { status: 500 });
     }
 
     // Gemini API call with Tool Use
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    // Use gemini-1.5-flash-latest for better compatibility
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [
-          { role: "user", parts: [{ text: systemPrompt }] },
           ...history,
           { role: "user", parts: [{ text: question }] }
         ],
@@ -271,7 +278,10 @@ ${context}`;
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || "Erro na API Gemini");
+    if (!response.ok) {
+      console.error("Gemini API Error:", data);
+      throw new Error(data.error?.message || `Erro na API Gemini (${response.status})`);
+    }
 
     let message = data.candidates?.[0]?.content;
 
@@ -281,12 +291,12 @@ ${context}`;
       const result = await toolHandlers[call.name](call.args);
 
       // Send tool response back to Gemini
-      const toolResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+      const toolResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [
-            { role: "user", parts: [{ text: systemPrompt }] },
             ...history,
             { role: "user", parts: [{ text: question }] },
             message,
@@ -306,18 +316,28 @@ ${context}`;
       });
 
       const finalData = await toolResponse.json();
-      const finalMsg = finalData.candidates?.[0]?.content?.parts?.[0]?.text;
-      return NextResponse.json({ answer: finalMsg, sources: relevant.map(r => r.source) });
+      if (!toolResponse.ok) throw new Error(finalData.error?.message || "Erro no processamento da ferramenta");
+
+      const finalContent = finalData.candidates?.[0]?.content;
+      const finalMsg = finalContent?.parts?.[0]?.text;
+
+      return NextResponse.json({
+        answer: finalMsg || "Pode me dar mais detalhes sobre o que precisa?",
+        metadata: result,
+        sources: relevant.map(r => r.source)
+      });
     }
 
     return NextResponse.json({
-      answer: message?.parts?.[0]?.text || "Desculpe, não consegui processar sua solicitação.",
+      answer: message?.parts?.[0]?.text || "Desculpe, não consegui processar sua solicitação no momento.",
       sources: relevant.map(r => r.source)
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro no endpoint:", error);
-    return NextResponse.json({ error: "Erro interno ao processar a requisição." }, { status: 500 });
+    return NextResponse.json({
+      error: error.message || "Erro interno ao processar a requisição."
+    }, { status: 500 });
   }
 }
 
