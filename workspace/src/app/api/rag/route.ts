@@ -245,13 +245,13 @@ export async function POST(req: NextRequest) {
 Sua missão é ajudar clientes com informações sobre a empresa, produtos e realizar cotações/pedidos.
 A TRATOPEL atua no agronegócio (peças de tratores, mecânica pesada, lubrificantes).
 
-Instruções:
-1. Para informações gerais, use o contexto fornecido no RAG.
-2. Para preços, estoque ou catálogo, USE OBRIGATORIAMENTE as ferramentas disponíveis.
-3. Se o cliente quiser uma cotação, peça os itens e quantidades e use a ferramenta 'generate_quote'.
-4. Após gerar uma cotação, informe ao cliente que ele pode baixar o arquivo em **PDF** ou **EXCEL**.
-5. Ofereça a opção de gerar o código **PIX** para pagamento imediato usando a ferramenta 'generate_payment_code'.
-6. Seja profissional, prestativo e fale como um consultor de vendas agrícola.
+Instruções IMPORTANTES E OBRIGATÓRIAS:
+1. USO IMEDIATO DE FERRAMENTAS: NUNCA peça permissão para buscar um produto, gerar cotação ou gerar PIX. Se o cliente mencionar uma peça (ex: "rolamento FAG"), USE IMEDIATAMENTE a ferramenta \`search_products\`. Não responda apenas dizendo "Vou buscar", você DEVE chamar a função \`search_products\` na mesma rodada.
+2. COTAÇÃO: Se o cliente pedir orçamento, USE A FERRAMENTA \`generate_quote\` IMEDIATAMENTE. Se faltar a quantidade, assuma 1. 
+3. PAGAMENTO PIX: Para gerar o PIX, aplique a ferramenta \`generate_payment_code\` DIRETO.
+4. Para informações gerais, use o contexto fornecido no RAG.
+5. Após gerar uma cotação via ferramenta, informe ao cliente que ele pode baixar o arquivo em PDF ou EXCEL.
+6. Seja direto e ajo como um sistema automatizado extremamente rápido que não enrola.
 
 Contexto RAG:
 ${context}`;
@@ -285,9 +285,11 @@ ${context}`;
 
     let message = data.candidates?.[0]?.content;
 
+    const callPart = message?.parts?.find((p: any) => p.functionCall);
+
     // Handle Tool Calls
-    if (message?.parts?.[0]?.functionCall) {
-      const call = message.parts[0].functionCall;
+    if (callPart) {
+      const call = callPart.functionCall;
       const result = await toolHandlers[call.name](call.args);
 
       // Send tool response back to Gemini
@@ -319,17 +321,18 @@ ${context}`;
       if (!toolResponse.ok) throw new Error(finalData.error?.message || "Erro no processamento da ferramenta");
 
       const finalContent = finalData.candidates?.[0]?.content;
-      const finalMsg = finalContent?.parts?.[0]?.text;
+      const finalMsg = finalContent?.parts?.map((p: any) => p.text).filter(Boolean).join("\n") || "";
 
       return NextResponse.json({
-        answer: finalMsg || "Pode me dar mais detalhes sobre o que precisa?",
+        answer: finalMsg || "Aqui estão as informações solicitadas.",
         metadata: result,
         sources: relevant.map(r => r.source)
       });
     }
 
+    const simpleMsg = message?.parts?.map((p: any) => p.text).filter(Boolean).join("\n") || "";
     return NextResponse.json({
-      answer: message?.parts?.[0]?.text || "Desculpe, não consegui processar sua solicitação no momento.",
+      answer: simpleMsg || "Desculpe, não consegui processar sua solicitação no momento.",
       sources: relevant.map(r => r.source)
     });
 
